@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Islamic Prayer Times</title>
+    <style>
+        :root {
+            --primary: #2E7D32;
+            --secondary: #C62828;
+            --background: #F5F5F5;
+            --text: #212121;
+            --card-bg: white;
+        }
+
+        [data-theme='dark'] {
+            --primary: #4CAF50;
+            --secondary: #EF5350;
+            --background: #121212;
+            --text: #FFFFFF;
+            --card-bg: #1E1E1E;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: var(--background);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .prayer-times {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .prayer-time {
+            text-align: center;
+            padding: 15px;
+            border-radius: 8px;
+            background: var(--card-bg);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .time {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: var(--primary);
+        }
+
+        .next-prayer {
+            font-size: 1.5em;
+            text-align: center;
+            margin: 20px 0;
+            color: var(--primary);
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            background: var(--primary);
+            color: white;
+            font-size: 1em;
+            margin: 5px;
+        }
+
+        .settings-panel {
+            position: fixed;
+            top: 0;
+            right: -300px;
+            width: 300px;
+            height: 100%;
+            background: var(--card-bg);
+            padding: 20px;
+            box-shadow: -2px 0 5px rgba(0,0,0,0.2);
+            transition: right 0.3s ease;
+        }
+
+        .settings-panel.open {
+            right: 0;
+        }
+
+        .location-input {
+            width: 100%;
+            padding: 8px;
+            margin: 10px 0;
+            border: 1px solid var(--text);
+            border-radius: 4px;
+            background: var(--card-bg);
+            color: var(--text);
+        }
+		
+		.sehri-iftar {
+			display: flex;
+			justify-content: space-around; /* Or space-between */
+			margin-top: 20px; /* Add some spacing */
+		}
+
+		.sehri, .iftar {
+			text-align: center; /* Center the text */
+		}
+
+        @media (max-width: 600px) {
+            .prayer-times {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Prayer Times</h1>
+            <button onclick="toggleSettings()">⚙️ Settings</button>
+        </div>
+
+        <div class="card">
+            <div class="next-prayer" id="nextPrayer">
+                Next Prayer: Loading...
+            </div>
+            <div id="countdown" style="text-align: center; font-size: 2em;">
+                --:--:--
+            </div>
+        </div>
+
+        <div class="prayer-times" id="prayerTimesList">
+            <!-- Prayer times will be populated by JavaScript -->
+        </div>
+		
+		<div class="card">
+			<div class="sehri-iftar">
+                <div class="sehri">Sehri: <span id="sehriTime">Loading...</span></div>
+                <div class="iftar">Iftar: <span id="iftarTime">Loading...</span></div>
+            </div>
+        </div>
+
+        <button onclick="toggleNotifications()" id="notificationBtn">Enable Notifications</button>
+    </div>
+
+    <div class="settings-panel" id="settingsPanel">
+        <h2>Settings</h2>
+        <div>
+            <label>City:</label>
+            <input type="text" id="cityInput" class="location-input" placeholder="Enter city name">
+        </div>
+        <button onclick="updateCity()">Update Location</button>
+        <button onclick="toggleTheme()">Toggle Dark Mode</button>
+        <button onclick="toggleSettings()">Close</button>
+    </div>
+
+    <script>
+        let currentTheme = localStorage.getItem('theme') || 'light';
+        let currentCity = localStorage.getItem('city') || 'London';
+        let notificationsEnabled = false;
+        let prayerTimes = {};
+
+        // Apply saved theme
+        document.documentElement.setAttribute('data-theme', currentTheme);
+        document.getElementById('cityInput').value = currentCity;
+
+        // Initial prayer times fetch
+        fetchPrayerTimes();
+
+        function toggleSettings() {
+            const panel = document.getElementById('settingsPanel');
+            panel.classList.toggle('open');
+        }
+
+        function toggleTheme() {
+            currentTheme = currentTheme === 'light' ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', currentTheme);
+            localStorage.setItem('theme', currentTheme);
+        }
+
+        function updateCity() {
+            const newCity = document.getElementById('cityInput').value;
+            if (newCity) {
+                currentCity = newCity;
+                localStorage.setItem('city', currentCity);
+                fetchPrayerTimes();
+                toggleSettings();
+            }
+        }
+
+        async function fetchPrayerTimes() {
+            try {
+                const date = new Date();
+                const response = await fetch(
+                    `https://api.aladhan.com/v1/timingsByCity/${date.getDate()}-${date.getMonth() + 1}-${date.getFullYear()}?city=${currentCity}&country=GB&method=2`
+                );
+                const data = await response.json();
+                
+                if (data.code === 200) {
+                    prayerTimes = data.data.timings;
+                    updatePrayerTimesDisplay();
+                    startCountdown();
+                }
+            } catch (error) {
+                console.error('Error fetching prayer times:', error);
+                alert('Error loading prayer times. Please check your connection and try again.');
+            }
+        }
+
+        function updatePrayerTimesDisplay() {
+            const prayersList = document.getElementById('prayerTimesList');
+            const mainPrayers = ['Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+            
+            prayersList.innerHTML = mainPrayers.map(prayer => `
+                <div class="prayer-time">
+                    <h3>${prayer}</h3>
+                    <div class="time">${formatTime(prayerTimes[prayer])}</div>
+                </div>
+            `).join('');
+        }
+
+        function formatTime(timeStr) {
+            if (!timeStr) return '--:--';
+            const [hours, minutes] = timeStr.split(':');
+            const date = new Date();
+            date.setHours(hours, minutes);
+            return date.toLocaleTimeString('en-US', { 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                hour12: true 
+            });
+        }
+
+        function startCountdown() {
+            setInterval(updateCountdown, 1000);
+            updateCountdown(); // Initial update
+        }
+
+        function updateCountdown() {
+            const now = new Date();
+            const prayers = ['Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+            let nextPrayer = null;
+            let nextPrayerTime = null;
+
+            // Find next prayer
+            for (let prayer of prayers) {
+                if (!prayerTimes[prayer]) continue;
+                
+                const [hours, minutes] = prayerTimes[prayer].split(':');
+                const prayerTime = new Date();
+                prayerTime.setHours(hours, minutes, 0);
+
+                if (prayerTime > now) {
+                    nextPrayer = prayer;
+                    nextPrayerTime = prayerTime;
+                    break;
+                }
+            }
+
+            // If no next prayer found today, use first prayer of next day
+            if (!nextPrayer) {
+                nextPrayer = prayers[0];
+                const [hours, minutes] = prayerTimes[prayers[0]].split(':');
+                nextPrayerTime = new Date();
+                nextPrayerTime.setDate(nextPrayerTime.getDate() + 1);
+                nextPrayerTime.setHours(hours, minutes, 0);
+            }
+
+            // Update display
+            const timeDiff = nextPrayerTime - now;
+            const hours = Math.floor(timeDiff / (1000 * 60 * 60));
+            const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((timeDiff % (1000 * 60)) / 1000);
+
+            document.getElementById('countdown').textContent = 
+                `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            document.getElementById('nextPrayer').textContent = `Next Prayer: ${nextPrayer}`;
+
+            // Check for notification
+            if (notificationsEnabled && hours === 0 && minutes === 15 && seconds === 0) {
+                notify(nextPrayer);
+            }
+        }
+
+        function toggleNotifications() {
+            if (!('Notification' in window)) {
+                alert('This browser does not support notifications');
+                return;
+            }
+
+            Notification.requestPermission().then(permission => {
+                if (permission === 'granted') {
+                    notificationsEnabled = !notificationsEnabled;
+                    const btn = document.getElementById('notificationBtn');
+                    btn.textContent = notificationsEnabled ? 'Disable Notifications' : 'Enable Notifications';
+                    alert(notificationsEnabled ? 'Prayer notifications enabled!' : 'Prayer notifications disabled!');
+                }
+            });
+        }
+
+        function notify(prayer) {
+            if (Notification.permission === 'granted') {
+                new Notification(`Prayer Time Reminder`, {
+                    body: `${prayer} prayer time in 15 minutes`,
+                    icon: '/path/to/icon.png' // Add your icon path
+                });
+            }
+        }
+    </script>
+</body>
+</html>
